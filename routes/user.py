@@ -1,6 +1,8 @@
 from flask import Blueprint, current_app, jsonify, request
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from flask_jwt_extended import create_access_token
+from flask_jwt_extended import create_access_token, create_refresh_token
+from sqlalchemy import select
 
 
 from config.extensions import db
@@ -518,96 +520,106 @@ def register_apprentice():
 
 auth_login_bp = Blueprint("auth_login", __name__)
 
+uth_bp = Blueprint(
+    "auth",
+    __name__,
+    url_prefix="/api/auth",
+)
 
-def _login_user(expected_role):
-    """Authenticate a user and issue a JWT access token."""
+auth_bp = Blueprint("auth", __name__)
+
+
+def error(message, status=400):
+    return jsonify({
+        "success": False,
+        "message": message,
+    }), status
+
+
+def success(data, message="Login successful.", status=200):
+    return jsonify({
+        "success": True,
+        "message": message,
+        "data": data,
+    }), status
+
+
+def login_for_role(required_role):
+    """Authenticate a user for the specified role."""
 
     if not request.is_json:
-        return jsonify(
-            success=False,
-            message="Content-Type must be application/json.",
-        ), 415
+        return error("Content-Type must be application/json.", 415)
 
     data = request.get_json(silent=True)
 
     if not isinstance(data, dict):
-        return jsonify(
-            success=False,
-            message="Provide a valid JSON object.",
-        ), 400
+        return error("A valid JSON object is required.")
 
     email = data.get("email")
     password = data.get("password")
 
-    # Both email and password are required.
     if not isinstance(email, str) or not email.strip():
-        return jsonify(
-            success=False,
-            message="Email is required.",
-        ), 400
+        return error("Email is required.")
 
     if not isinstance(password, str) or not password:
-        return jsonify(
-            success=False,
-            message="Password is required.",
-        ), 400
+        return error("Password is required.")
 
     try:
         normalized_email = email.strip().lower()
 
         user = db.session.execute(
-            db.select(User).where(
-                User.email == normalized_email,
-                User.role == expected_role,
-            )
+            select(User).where(User.email == normalized_email)
         ).scalar_one_or_none()
 
-        # Use a generic error to avoid revealing which accounts exist.
-        if user is None or not user.check_password(password):
-            return jsonify(
-                success=False,
-                message="Invalid email or password.",
-            ), 401
+        # Use a generic response for invalid credentials.
+        if not user or not user.check_password(password):
+            return error("Invalid email or password.", 401)
+
+        # Prevent users from signing in through another role's portal.
+        if user.role != required_role:
+            return error(
+                "This account cannot use this login portal.",
+                403,
+            )
 
         if not user.is_active:
-            return jsonify(
-                success=False,
-                message="This account is inactive.",
-            ), 403
+            return error("Your account is inactive.", 403)
+
+        # The UUID string is required by your current_user() helper.
+        identity = str(user.id)
 
         access_token = create_access_token(
-            identity=str(user.id),
-            additional_claims={
-                "role": user.role,
-            },
+            identity=identity,
+            additional_claims={"role": user.role},
         )
 
-        return jsonify(
-            success=True,
-            message="Login successful.",
-            data={
-                "access_token": access_token,
-                "token_type": "Bearer",
-                "user": user.to_dict(),
-            },
-        ), 200
+        refresh_token = create_refresh_token(
+            identity=identity,
+            additional_claims={"role": user.role},
+        )
+
+        return success({
+            "user": user.to_dict(),
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "Bearer",
+        })
 
     except SQLAlchemyError:
-        current_app.logger.exception("Login database error")
-
-        return jsonify(
-            success=False,
-            message="Unable to log in at this time.",
-        ), 500
+        db.session.rollback()
+        current_app.logger.exception("Database error during login.")
+        return error("An internal server error occurred.", 500)
 
 
-@auth_login_bp.post("/api/apprentice/login")
-def login_apprentice():
+# Apprentice login
+# POST /api/apprentice/login
+@auth_bp.post("/api/apprentice/login")
+def apprentice_login():
     """
     Apprentice login.
     ---
     tags:
-      - Apprentice Authentication
+      - Authentication - Apprentice
     consumes:
       - application/json
     parameters:
@@ -622,34 +634,34 @@ def login_apprentice():
           properties:
             email:
               type: string
-              format: email
-              example: jane@example.com
+              example: apprentice@example.com
             password:
               type: string
-              format: password
-              example: "SecurePass123!"
+              example: StrongPassword123
     responses:
       200:
-        description: Login successful; returns a JWT access token.
+        description: Apprentice logged in successfully.
       400:
-        description: Email or password is missing.
+        description: Missing or invalid input.
       401:
-        description: Invalid credentials.
+        description: Invalid email or password.
       403:
-        description: Account is inactive.
+        description: Account role mismatch or inactive account.
       415:
-        description: Content-Type must be application/json.
+        description: JSON content type required.
     """
-    return _login_user("apprentice")
+    return login_for_role("apprentice")
 
 
-@auth_login_bp.post("/api/employer/login")
-def login_employer():
+# Employer login
+# POST /api/employer/login
+@auth_bp.post("/api/employer/login")
+def employer_login():
     """
     Employer login.
     ---
     tags:
-      - Employer Authentication
+      - Authentication - Employer
     consumes:
       - application/json
     parameters:
@@ -664,34 +676,34 @@ def login_employer():
           properties:
             email:
               type: string
-              format: email
-              example: grace@example.com
+              example: employer@example.com
             password:
               type: string
-              format: password
-              example: "SecurePass123!"
+              example: StrongPassword123
     responses:
       200:
-        description: Login successful; returns a JWT access token.
+        description: Employer logged in successfully.
       400:
-        description: Email or password is missing.
+        description: Missing or invalid input.
       401:
-        description: Invalid credentials.
+        description: Invalid email or password.
       403:
-        description: Account is inactive.
+        description: Account role mismatch or inactive account.
       415:
-        description: Content-Type must be application/json.
+        description: JSON content type required.
     """
-    return _login_user("employer")
+    return login_for_role("employer")
 
 
-@auth_login_bp.post("/api/admin/login")
-def login_admin():
+# Admin login
+# POST /api/admin/login
+@auth_bp.post("/api/admin/login")
+def admin_login():
     """
-    Admin login.
+    Administrator login.
     ---
     tags:
-      - Admin Authentication
+      - Authentication - Admin
     consumes:
       - application/json
     parameters:
@@ -706,24 +718,20 @@ def login_admin():
           properties:
             email:
               type: string
-              format: email
               example: admin@example.com
             password:
               type: string
-              format: password
-              example: "SecurePass123!"
+              example: StrongPassword123
     responses:
       200:
-        description: Login successful; returns a JWT access token.
+        description: Admin logged in successfully.
       400:
-        description: Email or password is missing.
+        description: Missing or invalid input.
       401:
-        description: Invalid credentials.
+        description: Invalid email or password.
       403:
-        description: Account is inactive.
+        description: Account role mismatch or inactive account.
       415:
-        description: Content-Type must be application/json.
+        description: JSON content type required.
     """
-    return _login_user("admin")
-
-
+    return login_for_role("admin")

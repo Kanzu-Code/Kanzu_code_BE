@@ -7,6 +7,8 @@ from config.extensions import Config, db, migrate
 
 from models.user import User
 from routes.user import employer_auth_bp, admin_auth_bp, apprentice_auth_bp
+from routes.apprenticeship_routes import apprenticeship_bp
+from routes.user import auth_bp 
 
 
 app = Flask(__name__)
@@ -18,7 +20,9 @@ migrate.init_app(app, db)
 
 app.register_blueprint(employer_auth_bp),
 app.register_blueprint(admin_auth_bp), 
-app.register_blueprint(apprentice_auth_bp)
+app.register_blueprint(apprentice_auth_bp), 
+app.register_blueprint(apprenticeship_bp),
+app.register_blueprint(auth_bp), 
 
 
 swagger_config = {
