@@ -15,7 +15,7 @@ class User(db.Model):
 
     __table_args__ = (
         db.CheckConstraint(
-            "role IN ('apprentice', 'employee', 'admin')",
+            "role IN ('apprentice', 'employer', 'admin')",
             name="ck_users_valid_role",
         ),
         db.CheckConstraint(
@@ -74,11 +74,11 @@ class User(db.Model):
 
     @db.validates("role")
     def validate_role(self, key, value):
-        allowed_roles = {"apprentice", "employee", "admin"}
+        allowed_roles = {"apprentice", "employer", "admin"}
 
         if value not in allowed_roles:
             raise ValueError(
-                "Role must be apprentice, employee, or admin."
+                "Role must be apprentice, employer, or admin."
             )
 
         return value

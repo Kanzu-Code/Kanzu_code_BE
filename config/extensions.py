@@ -3,10 +3,12 @@ import os
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import URL
+from flask_jwt_extended import JWTManager
 
 
 db = SQLAlchemy()
 migrate = Migrate()
+jwt = JWTManager()
 
 
 class Config:
