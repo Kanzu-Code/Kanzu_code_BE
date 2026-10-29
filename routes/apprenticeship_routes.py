@@ -135,6 +135,59 @@ def commit_or_error():
 @apprenticeship_bp.post("/apprenticeships")
 @jwt_required()
 def create_apprenticeship():
+    """
+    Create an apprenticeship.
+
+    ---
+    tags:
+      - Apprenticeships
+    summary: Create an apprenticeship and its four milestones
+    description: >
+      Employers can create apprenticeships for themselves.
+      Admins can select an employer. Automatically creates
+      four milestones and a UGX 100,000 payment record for
+      each milestone.
+    security:
+      - Bearer: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - apprentice_id
+              - start_date
+            properties:
+              apprentice_id:
+                type: string
+                format: uuid
+                description: Existing user with the apprentice role
+              employer_id:
+                type: string
+                format: uuid
+                description: Required when an admin creates the record
+              start_date:
+                type: string
+                format: date
+                example: "2026-10-29"
+              end_date:
+                type: string
+                format: date
+                nullable: true
+                example: "2026-12-24"
+    responses:
+      201:
+        description: Apprenticeship created successfully
+      400:
+        description: Invalid or missing input
+      401:
+        description: Missing or invalid JWT
+      403:
+        description: Insufficient permissions
+      409:
+        description: Database constraint conflict
+    """
     user, denied = require_roles("employer", "admin")
     if denied:
         return denied
@@ -222,6 +275,38 @@ def create_apprenticeship():
 @apprenticeship_bp.get("/apprenticeships")
 @jwt_required()
 def list_apprenticeships():
+    """
+    List apprenticeships accessible to the authenticated user.
+    ---
+    tags:
+      - Apprenticeships
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: Apprenticeships retrieved successfully.
+        schema:
+          type: object
+          properties:
+            apprenticeships:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  apprentice_id:
+                    type: string
+                  employer_id:
+                    type: string
+                  status:
+                    type: string
+                    example: active
+      401:
+        description: Missing or invalid JWT.
+      403:
+        description: User is not authorized to access these apprenticeships.
+    """
     user, denied = require_roles("apprentice", "employer", "admin")
     if denied:
         return denied
@@ -255,6 +340,29 @@ def list_apprenticeships():
 @apprenticeship_bp.get("/apprenticeships/<uuid:apprenticeship_id>")
 @jwt_required()
 def get_apprenticeship(apprenticeship_id):
+    """
+    Retrieve an apprenticeship by ID.
+    ---
+    tags:
+      - Apprenticeships
+    security:
+      - Bearer: []
+    parameters:
+      - name: apprenticeship_id
+        in: path
+        required: true
+        type: string
+        description: UUID of the apprenticeship.
+    responses:
+      200:
+        description: Apprenticeship retrieved successfully.
+      401:
+        description: Missing or invalid JWT.
+      403:
+        description: Insufficient permissions.
+      404:
+        description: Apprenticeship not found.
+    """
     user, denied = require_roles("apprentice", "employer", "admin")
     if denied:
         return denied
@@ -272,6 +380,47 @@ def get_apprenticeship(apprenticeship_id):
 @apprenticeship_bp.patch("/apprenticeships/<uuid:apprenticeship_id>")
 @jwt_required()
 def update_apprenticeship(apprenticeship_id):
+    """
+    Update an apprenticeship.
+    ---
+    tags:
+      - Apprenticeships
+    security:
+      - Bearer: []
+    parameters:
+      - name: apprenticeship_id
+        in: path
+        required: true
+        type: string
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          properties:
+            start_date:
+              type: string
+              format: date
+              example: "2026-10-01"
+            end_date:
+              type: string
+              format: date
+              example: "2027-04-01"
+            status:
+              type: string
+              enum: [active, completed, paused]
+    responses:
+      200:
+        description: Apprenticeship updated successfully.
+      400:
+        description: Invalid update data.
+      401:
+        description: Missing or invalid JWT.
+      403:
+        description: Insufficient permissions.
+      404:
+        description: Apprenticeship not found.
+    """
     user, denied = require_roles("employer", "admin")
     if denied:
         return denied
@@ -312,6 +461,28 @@ def update_apprenticeship(apprenticeship_id):
 @apprenticeship_bp.delete("/apprenticeships/<uuid:apprenticeship_id>")
 @jwt_required()
 def delete_apprenticeship(apprenticeship_id):
+    """
+    Delete an apprenticeship.
+    ---
+    tags:
+      - Apprenticeships
+    security:
+      - Bearer: []
+    parameters:
+      - name: apprenticeship_id
+        in: path
+        required: true
+        type: string
+    responses:
+      200:
+        description: Apprenticeship deleted successfully.
+      401:
+        description: Missing or invalid JWT.
+      403:
+        description: Insufficient permissions.
+      404:
+        description: Apprenticeship not found.
+    """
     user, denied = require_roles("admin")
     if denied:
         return denied
@@ -329,6 +500,53 @@ def delete_apprenticeship(apprenticeship_id):
 @apprenticeship_bp.post("/milestones")
 @jwt_required()
 def create_milestone():
+    """
+    Create a milestone for an apprenticeship.
+    ---
+    tags:
+      - Milestones
+    security:
+      - Bearer: []
+    parameters:
+      - name: apprenticeship_id
+        in: path
+        required: true
+        type: string
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          required:
+            - title
+            - week_number
+            - due_date
+          properties:
+            title:
+              type: string
+              example: Build the authentication API
+            description:
+              type: string
+              example: Implement registration and JWT login.
+            week_number:
+              type: integer
+              enum: [1, 3, 6, 8]
+            due_date:
+              type: string
+              format: date
+              example: "2026-11-05"
+    responses:
+      201:
+        description: Milestone created successfully.
+      400:
+        description: Invalid milestone data.
+      401:
+        description: Missing or invalid JWT.
+      403:
+        description: Insufficient permissions.
+      404:
+        description: Apprenticeship not found.
+    """
     user, denied = require_roles("admin", "employer")
     if denied:
         return denied
@@ -388,6 +606,28 @@ def create_milestone():
 @apprenticeship_bp.get("/milestones")
 @jwt_required()
 def list_milestones():
+    """
+    List milestones belonging to an apprenticeship.
+    ---
+    tags:
+      - Milestones
+    security:
+      - Bearer: []
+    parameters:
+      - name: apprenticeship_id
+        in: path
+        required: true
+        type: string
+    responses:
+      200:
+        description: Milestones retrieved successfully.
+      401:
+        description: Missing or invalid JWT.
+      403:
+        description: Insufficient permissions.
+      404:
+        description: Apprenticeship not found.
+    """
     user, denied = require_roles("apprentice", "employer", "admin")
     if denied:
         return denied
@@ -419,6 +659,28 @@ def list_milestones():
 @apprenticeship_bp.get("/milestones/<uuid:milestone_id>")
 @jwt_required()
 def get_milestone(milestone_id):
+    """
+    Retrieve a milestone by ID.
+    ---
+    tags:
+      - Milestones
+    security:
+      - Bearer: []
+    parameters:
+      - name: milestone_id
+        in: path
+        required: true
+        type: string
+    responses:
+      200:
+        description: Milestone retrieved successfully.
+      401:
+        description: Missing or invalid JWT.
+      403:
+        description: Insufficient permissions.
+      404:
+        description: Milestone not found.
+    """
     user, denied = require_roles("apprentice", "employer", "admin")
     if denied:
         return denied
@@ -439,6 +701,51 @@ def get_milestone(milestone_id):
 @apprenticeship_bp.patch("/milestones/<uuid:milestone_id>")
 @jwt_required()
 def update_milestone(milestone_id):
+    """
+    Update a milestone.
+    ---
+    tags:
+      - Milestones
+    security:
+      - Bearer: []
+    parameters:
+      - name: milestone_id
+        in: path
+        required: true
+        type: string
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          properties:
+            title:
+              type: string
+            description:
+              type: string
+            due_date:
+              type: string
+              format: date
+            status:
+              type: string
+              enum:
+                - not_started
+                - in_progress
+                - awaiting_review
+                - changes_requested
+                - completed
+    responses:
+      200:
+        description: Milestone updated successfully.
+      400:
+        description: Invalid milestone data.
+      401:
+        description: Missing or invalid JWT.
+      403:
+        description: Insufficient permissions.
+      404:
+        description: Milestone not found.
+    """
     user, denied = require_roles("admin", "employer")
     if denied:
         return denied
@@ -493,6 +800,28 @@ def update_milestone(milestone_id):
 @apprenticeship_bp.delete("/milestones/<uuid:milestone_id>")
 @jwt_required()
 def delete_milestone(milestone_id):
+    """
+    Delete a milestone.
+    ---
+    tags:
+      - Milestones
+    security:
+      - Bearer: []
+    parameters:
+      - name: milestone_id
+        in: path
+        required: true
+        type: string
+    responses:
+      200:
+        description: Milestone deleted successfully.
+      401:
+        description: Missing or invalid JWT.
+      403:
+        description: Insufficient permissions.
+      404:
+        description: Milestone not found.
+    """
     user, denied = require_roles("admin")
     if denied:
         return denied
@@ -513,6 +842,47 @@ def delete_milestone(milestone_id):
 @apprenticeship_bp.post("/milestones/<uuid:milestone_id>/submissions")
 @jwt_required()
 def submit_milestone(milestone_id):
+    """
+    Submit milestone work for mentor review.
+
+    ---
+    tags:
+      - Submissions
+    summary: Submit work for a milestone
+    security:
+      - Bearer: []
+    parameters:
+      - name: milestone_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - submission_text
+            properties:
+              submission_text:
+                type: string
+                minLength: 1
+                example: "Completed onboarding and documented the setup."
+    responses:
+      201:
+        description: Submission created and milestone awaiting review
+      400:
+        description: Missing or invalid submission text
+      403:
+        description: User is not the assigned apprentice
+      404:
+        description: Milestone not found
+      409:
+        description: Milestone already completed or awaiting review
+    """
     user, denied = require_roles("apprentice")
     if denied:
         return denied
@@ -556,6 +926,28 @@ def submit_milestone(milestone_id):
 @apprenticeship_bp.get("/milestones/<uuid:milestone_id>/submissions")
 @jwt_required()
 def list_submissions(milestone_id):
+    """
+    List submissions for a milestone.
+    ---
+    tags:
+      - Submissions
+    security:
+      - Bearer: []
+    parameters:
+      - name: milestone_id
+        in: path
+        required: true
+        type: string
+    responses:
+      200:
+        description: Submissions retrieved successfully.
+      401:
+        description: Missing or invalid JWT.
+      403:
+        description: Insufficient permissions.
+      404:
+        description: Milestone not found.
+    """
     user, denied = require_roles("apprentice", "employer", "admin")
     if denied:
         return denied
@@ -578,6 +970,28 @@ def list_submissions(milestone_id):
 @apprenticeship_bp.get("/submissions/<uuid:submission_id>")
 @jwt_required()
 def get_submission(submission_id):
+    """
+    Retrieve a milestone submission by ID.
+    ---
+    tags:
+      - Submissions
+    security:
+      - Bearer: []
+    parameters:
+      - name: submission_id
+        in: path
+        required: true
+        type: string
+    responses:
+      200:
+        description: Submission retrieved successfully.
+      401:
+        description: Missing or invalid JWT.
+      403:
+        description: Insufficient permissions.
+      404:
+        description: Submission not found.
+    """
     user, denied = require_roles("apprentice", "employer", "admin")
     if denied:
         return denied
@@ -596,6 +1010,39 @@ def get_submission(submission_id):
 @apprenticeship_bp.patch("/submissions/<uuid:submission_id>")
 @jwt_required()
 def update_submission(submission_id):
+    """
+    Update a milestone submission.
+    ---
+    tags:
+      - Submissions
+    security:
+      - Bearer: []
+    parameters:
+      - name: submission_id
+        in: path
+        required: true
+        type: string
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          properties:
+            submission_text:
+              type: string
+              example: "Implemented the required endpoints and tests."
+    responses:
+      200:
+        description: Submission updated successfully.
+      400:
+        description: Invalid submission data.
+      401:
+        description: Missing or invalid JWT.
+      403:
+        description: Insufficient permissions.
+      404:
+        description: Submission not found.
+    """
     user, denied = require_roles("apprentice")
     if denied:
         return denied
@@ -624,6 +1071,41 @@ def update_submission(submission_id):
 @apprenticeship_bp.post("/submissions/<uuid:submission_id>/resubmit")
 @jwt_required()
 def resubmit_work(submission_id):
+    """
+    Resubmit a milestone after requested changes.
+    ---
+    tags:
+      - Submissions
+    security:
+      - Bearer: []
+    parameters:
+      - name: milestone_id
+        in: path
+        required: true
+        type: string
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          required:
+            - submission_text
+          properties:
+            submission_text:
+              type: string
+              example: "Updated implementation addressing the mentor's feedback."
+    responses:
+      201:
+        description: Milestone resubmitted successfully.
+      400:
+        description: Milestone cannot be resubmitted or request data is invalid.
+      401:
+        description: Missing or invalid JWT.
+      403:
+        description: Only the assigned apprentice may resubmit.
+      404:
+        description: Milestone not found.
+    """
     user, denied = require_roles("apprentice")
     if denied:
         return denied
@@ -663,6 +1145,28 @@ def resubmit_work(submission_id):
 @apprenticeship_bp.delete("/submissions/<uuid:submission_id>")
 @jwt_required()
 def delete_submission(submission_id):
+    """
+    Delete a milestone submission.
+    ---
+    tags:
+      - Submissions
+    security:
+      - Bearer: []
+    parameters:
+      - name: submission_id
+        in: path
+        required: true
+        type: string
+    responses:
+      200:
+        description: Submission deleted successfully.
+      401:
+        description: Missing or invalid JWT.
+      403:
+        description: Insufficient permissions.
+      404:
+        description: Submission not found.
+    """
     user, denied = require_roles("admin")
     if denied:
         return denied
@@ -683,6 +1187,65 @@ def delete_submission(submission_id):
 @apprenticeship_bp.post("/submissions/<uuid:submission_id>/reviews")
 @jwt_required()
 def review_submission(submission_id):
+    """
+    Review an apprentice submission.
+
+    ---
+    tags:
+      - Mentor Feedback
+    summary: Approve work or request changes
+    description: >
+      The assigned employer must provide a rating from 1 to 5,
+      a non-empty comment, and a decision. Approval completes
+      the milestone and makes its payment due. Requesting changes
+      keeps the payment not yet due.
+    security:
+      - Bearer: []
+    parameters:
+      - name: submission_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - rating
+              - comment
+              - decision
+            properties:
+              rating:
+                type: integer
+                minimum: 1
+                maximum: 5
+                example: 5
+              comment:
+                type: string
+                minLength: 1
+                example: "Great work. The milestone requirements are met."
+              decision:
+                type: string
+                enum:
+                  - approved
+                  - changes_requested
+                example: approved
+    responses:
+      200:
+        description: Review saved and milestone/payment updated
+      400:
+        description: Invalid rating, comment, or decision
+      403:
+        description: Reviewer is not authorized
+      404:
+        description: Submission not found
+      409:
+        description: Submission has already been reviewed
+    """
     user, denied = require_roles("employer", "admin")
     if denied:
         return denied
@@ -800,6 +1363,28 @@ def list_reviews(submission_id):
 @apprenticeship_bp.get("/feedback/<uuid:feedback_id>")
 @jwt_required()
 def get_feedback(feedback_id):
+    """
+    Retrieve a mentor feedback record.
+    ---
+    tags:
+      - Mentor Feedback
+    security:
+      - Bearer: []
+    parameters:
+      - name: feedback_id
+        in: path
+        required: true
+        type: string
+    responses:
+      200:
+        description: Feedback retrieved successfully.
+      401:
+        description: Missing or invalid JWT.
+      403:
+        description: Insufficient permissions.
+      404:
+        description: Feedback not found.
+    """
     user, denied = require_roles("apprentice", "employer", "admin")
     if denied:
         return denied
@@ -818,6 +1403,47 @@ def get_feedback(feedback_id):
 @apprenticeship_bp.patch("/feedback/<uuid:feedback_id>")
 @jwt_required()
 def update_feedback(feedback_id):
+    """
+    Update mentor feedback.
+    ---
+    tags:
+      - Mentor Feedback
+    security:
+      - Bearer: []
+    parameters:
+      - name: feedback_id
+        in: path
+        required: true
+        type: string
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          properties:
+            rating:
+              type: integer
+              minimum: 1
+              maximum: 5
+              example: 4
+            comment:
+              type: string
+              example: "Good progress. Improve input validation."
+            decision:
+              type: string
+              enum: [approved, changes_requested]
+    responses:
+      200:
+        description: Feedback updated successfully.
+      400:
+        description: Invalid feedback data.
+      401:
+        description: Missing or invalid JWT.
+      403:
+        description: Insufficient permissions.
+      404:
+        description: Feedback not found.
+    """
     user, denied = require_roles("admin")
     if denied:
         return denied
@@ -852,6 +1478,28 @@ def update_feedback(feedback_id):
 @apprenticeship_bp.delete("/feedback/<uuid:feedback_id>")
 @jwt_required()
 def delete_feedback(feedback_id):
+    """
+    Delete mentor feedback.
+    ---
+    tags:
+      - Mentor Feedback
+    security:
+      - Bearer: []
+    parameters:
+      - name: feedback_id
+        in: path
+        required: true
+        type: string
+    responses:
+      200:
+        description: Feedback deleted successfully.
+      401:
+        description: Missing or invalid JWT.
+      403:
+        description: Insufficient permissions.
+      404:
+        description: Feedback not found.
+    """
     user, denied = require_roles("admin")
     if denied:
         return denied
@@ -869,6 +1517,28 @@ def delete_feedback(feedback_id):
 @apprenticeship_bp.get("/payments")
 @jwt_required()
 def list_payments():
+    """
+    List milestone payments accessible to the authenticated user.
+    ---
+    tags:
+      - Payments
+    security:
+      - Bearer: []
+    parameters:
+      - name: status
+        in: query
+        required: false
+        type: string
+        enum: [not_yet_due, due, paid]
+        description: Optional payment status filter, if supported by the route.
+    responses:
+      200:
+        description: Payments retrieved successfully.
+      401:
+        description: Missing or invalid JWT.
+      403:
+        description: Insufficient permissions.
+    """
     user, denied = require_roles("apprentice", "employer", "admin")
     if denied:
         return denied
@@ -900,6 +1570,28 @@ def list_payments():
 @apprenticeship_bp.get("/payments/<uuid:payment_id>")
 @jwt_required()
 def get_payment(payment_id):
+    """
+    Retrieve a milestone payment by ID.
+    ---
+    tags:
+      - Payments
+    security:
+      - Bearer: []
+    parameters:
+      - name: payment_id
+        in: path
+        required: true
+        type: string
+    responses:
+      200:
+        description: Payment retrieved successfully.
+      401:
+        description: Missing or invalid JWT.
+      403:
+        description: Insufficient permissions.
+      404:
+        description: Payment not found.
+    """
     user, denied = require_roles("apprentice", "employer", "admin")
     if denied:
         return denied
@@ -918,6 +1610,30 @@ def get_payment(payment_id):
 @apprenticeship_bp.post("/payments/<uuid:payment_id>/mark-paid")
 @jwt_required()
 def mark_payment_paid(payment_id):
+    """
+    Mark a milestone payment as paid.
+    ---
+    tags:
+      - Payments
+    security:
+      - Bearer: []
+    parameters:
+      - name: payment_id
+        in: path
+        required: true
+        type: string
+    responses:
+      200:
+        description: Payment marked as paid successfully.
+      400:
+        description: Payment is not eligible to be marked as paid.
+      401:
+        description: Missing or invalid JWT.
+      403:
+        description: Only an authorized employer or administrator may perform this action.
+      404:
+        description: Payment not found.
+    """
     user, denied = require_roles("employer", "admin")
     if denied:
         return denied
@@ -949,6 +1665,42 @@ def mark_payment_paid(payment_id):
 @apprenticeship_bp.patch("/payments/<uuid:payment_id>")
 @jwt_required()
 def update_payment(payment_id):
+    """
+    Update the amount assigned to a milestone payment.
+    ---
+    tags:
+      - Payments
+    security:
+      - Bearer: []
+    parameters:
+      - name: payment_id
+        in: path
+        required: true
+        type: string
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          required:
+            - amount
+          properties:
+            amount:
+              type: number
+              minimum: 0
+              example: 100000
+    responses:
+      200:
+        description: Payment amount updated successfully.
+      400:
+        description: Invalid payment amount.
+      401:
+        description: Missing or invalid JWT.
+      403:
+        description: Only an administrator may update payment amounts.
+      404:
+        description: Payment not found.
+    """
     user, denied = require_roles("admin")
     if denied:
         return denied
@@ -982,6 +1734,42 @@ def update_payment(payment_id):
 @apprenticeship_bp.get("/apprenticeships/<uuid:apprenticeship_id>/progress")
 @jwt_required()
 def apprenticeship_progress(apprenticeship_id):
+    """
+    Retrieve milestone completion progress for an apprenticeship.
+    ---
+    tags:
+      - Dashboard
+    security:
+      - Bearer: []
+    parameters:
+      - name: apprenticeship_id
+        in: path
+        required: true
+        type: string
+    responses:
+      200:
+        description: Apprenticeship progress retrieved successfully.
+        schema:
+          type: object
+          properties:
+            apprenticeship_id:
+              type: string
+            total_milestones:
+              type: integer
+              example: 4
+            completed_milestones:
+              type: integer
+              example: 2
+            progress_percentage:
+              type: number
+              example: 50.0
+      401:
+        description: Missing or invalid JWT.
+      403:
+        description: Insufficient permissions.
+      404:
+        description: Apprenticeship not found.
+    """
     user, denied = require_roles("apprentice", "employer", "admin")
     if denied:
         return denied
@@ -1043,6 +1831,36 @@ def apprenticeship_progress(apprenticeship_id):
 @apprenticeship_bp.get("/dashboard")
 @jwt_required()
 def dashboard():
+    """
+    Retrieve dashboard statistics for the authenticated user.
+    ---
+    tags:
+      - Dashboard
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: Dashboard statistics retrieved successfully.
+        schema:
+          type: object
+          properties:
+            total_apprenticeships:
+              type: integer
+              example: 5
+            total_milestones:
+              type: integer
+              example: 20
+            completed_milestones:
+              type: integer
+              example: 8
+            pending_payments:
+              type: number
+              example: 400000
+      401:
+        description: Missing or invalid JWT.
+      403:
+        description: Insufficient permissions.
+    """
     user, denied = require_roles("apprentice", "employer", "admin")
     if denied:
         return denied
@@ -1090,6 +1908,21 @@ def dashboard():
 @apprenticeship_bp.get("/milestones/overdue")
 @jwt_required()
 def list_overdue_milestones():
+    """
+    List overdue milestones accessible to the authenticated user.
+    ---
+    tags:
+      - Dashboard
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: Overdue milestones retrieved successfully.
+      401:
+        description: Missing or invalid JWT.
+      403:
+        description: Insufficient permissions.
+    """
     user, denied = require_roles("employer", "admin")
     if denied:
         return denied
