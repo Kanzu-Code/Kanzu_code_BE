@@ -3,7 +3,7 @@ from flasgger import Swagger
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
-from config.extensions import Config, db, migrate
+from config.extensions import Config, db, migrate, jwt
 
 from models.user import User
 from routes.user import employer_auth_bp, admin_auth_bp, apprentice_auth_bp
@@ -16,6 +16,7 @@ app.config.from_object(Config)
 
 db.init_app(app)
 migrate.init_app(app, db)
+jwt.init_app(app)
 
 
 app.register_blueprint(employer_auth_bp),
