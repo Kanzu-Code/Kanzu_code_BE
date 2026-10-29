@@ -4,7 +4,7 @@ from flask_jwt_extended import create_access_token
 
 
 from config.extensions import db
-from models import User
+from models.user import User
 
 
 employer_auth_bp = Blueprint( "employer_auth", __name__, url_prefix="/api/employer",)
